@@ -182,8 +182,9 @@ or damage ABI.
 ## Prerequisites
 
 - Windows 10 or later, x64.
-- Visual Studio 2022 Build Tools with the **Desktop development with C++**
-  workload (MSVC 14.4x and the bundled CMake).
+- Visual Studio 2022 or later with the **Desktop development with C++**
+  workload (MSVC and the bundled CMake). The build script selects the newest
+  installed Visual Studio generator, so VS 2022 and VS 2026 both work.
 - .NET SDK 10.0 or later.
 - Inno Setup 6 for `-Package` builds. The installed game is self-contained and
   needs neither the .NET runtime nor the Visual C++ redistributable.

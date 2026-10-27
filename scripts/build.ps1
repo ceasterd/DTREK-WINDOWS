@@ -130,9 +130,42 @@ function Find-InnoSetup {
     throw 'Inno Setup 6 was not found. Install it and retry, for example: winget install JRSoftware.InnoSetup'
 }
 
+function Find-VisualStudioGenerator {
+    param([Parameter(Mandatory)][string]$CMakePath)
+
+    # CMake marks its default generator with '*'. On Windows that is the newest
+    # installed Visual Studio, so this picks 2022 or 2026 automatically.
+    $help = & $CMakePath --help
+    foreach ($line in $help) {
+        if ($line -match '^\s*\*\s*(Visual Studio \d+ \d+)\s*=') {
+            return $Matches[1].Trim()
+        }
+    }
+
+    # No default Visual Studio generator was advertised; use the newest one
+    # that CMake reports, in case CMAKE_GENERATOR selects something else.
+    $capabilities = & $CMakePath -E capabilities | ConvertFrom-Json
+    $generators = @($capabilities.generators |
+        Where-Object { $_.name -match '^Visual Studio (\d+) \d{4}$' } |
+        Sort-Object { [int]($_.name -replace '^Visual Studio (\d+) .*$', '$1') } -Descending)
+    if ($generators.Count -gt 0) {
+        return $generators[0].name
+    }
+
+    throw 'No Visual Studio generator was found. Install the Visual Studio C++ build tools and retry.'
+}
+
 $cmake = Find-CMake
 $dotnet = Find-Dotnet
 $ctest = Join-Path (Split-Path -Parent $cmake) 'ctest.exe'
+if (-not (Test-Path -LiteralPath $ctest)) {
+    $ctestCommand = Get-Command ctest -ErrorAction SilentlyContinue
+    if (-not $ctestCommand) {
+        throw 'ctest was not found. Install CMake 3.20 or later and retry.'
+    }
+    $ctest = $ctestCommand.Source
+}
+$generator = if ($SkipNative) { $null } else { Find-VisualStudioGenerator $cmake }
 
 Write-Host "DTREK modern build" -ForegroundColor Cyan
 Write-Host "  configuration : $Configuration"
@@ -140,6 +173,9 @@ Write-Host "  version       : $version"
 Write-Host "  root          : $root"
 Write-Host "  cmake         : $cmake"
 Write-Host "  dotnet        : $dotnet"
+if ($generator) {
+    Write-Host "  generator     : $generator"
+}
 Write-Host
 
 if (-not $SkipNative) {
@@ -147,7 +183,7 @@ if (-not $SkipNative) {
     Invoke-Checked $cmake @(
         '-S', $nativeDir,
         '-B', $buildDir,
-        '-G', 'Visual Studio 17 2022',
+        '-G', $generator,
         '-A', 'x64'
     )
 
