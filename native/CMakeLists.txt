@@ -1,10 +1,15 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(dtrek_core VERSION 0.5.0 LANGUAGES C)
+project(dtrek_core VERSION 0.6.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
+
+if(MSVC)
+    # Link the C runtime statically so the shipped DLL needs no VC++ redist.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 set(DTREK_ARTIFACT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../artifacts/native"
     CACHE PATH "Directory for the built native DLL and test executable")

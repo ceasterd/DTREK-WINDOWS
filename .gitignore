@@ -3,6 +3,7 @@
 **/obj/
 artifacts/
 native/build/
+dist/
 
 # Visual Studio / .NET user state
 .vs/

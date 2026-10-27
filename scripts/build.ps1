@@ -12,11 +12,18 @@ Skip the CMake build. The native DLL must already exist in artifacts\native.
 .PARAMETER Test
 Run native CTest and the managed console smoke test after building.
 
+.PARAMETER Package
+Create a self-contained win-x64 publish, a portable ZIP, and an Inno Setup
+installer under dist\. Requires Inno Setup 6.
+
 .PARAMETER Run
 Launch the WPF app after building (the script waits until it closes).
 
 .EXAMPLE
 .\scripts\build.ps1 -Test
+
+.EXAMPLE
+.\scripts\build.ps1 -Test -Package
 
 .EXAMPLE
 .\scripts\build.ps1 -Run
@@ -30,6 +37,8 @@ param(
 
     [switch]$Test,
 
+    [switch]$Package,
+
     [switch]$Run
 )
 
@@ -39,6 +48,18 @@ $root = Split-Path -Parent $PSScriptRoot
 $nativeDir = Join-Path $root 'native'
 $buildDir = Join-Path $nativeDir 'build'
 $artifactDll = Join-Path $root 'artifacts\native\dtrek_core.dll'
+$distDir = Join-Path $root 'dist'
+
+$versionNode = Select-Xml -Path (Join-Path $root 'Directory.Build.props') `
+    -XPath '/Project/PropertyGroup/DtrekVersion' | Select-Object -First 1
+if (-not $versionNode) {
+    throw 'Directory.Build.props does not define DtrekVersion.'
+}
+$version = $versionNode.Node.InnerText.Trim()
+
+if ($Package -and $Configuration -ne 'Release') {
+    throw 'Packaging requires Release configuration.'
+}
 
 function Invoke-Checked {
     param(
@@ -88,12 +109,34 @@ function Find-Dotnet {
     throw '.NET SDK was not found. Install the .NET 10 SDK and retry.'
 }
 
+function Find-InnoSetup {
+    $command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+    if ($command) {
+        return $command.Source
+    }
+
+    $candidates = @(
+        (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
+        (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe')
+    )
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
+    }
+
+    throw 'Inno Setup 6 was not found. Install it and retry, for example: winget install JRSoftware.InnoSetup'
+}
+
 $cmake = Find-CMake
 $dotnet = Find-Dotnet
 $ctest = Join-Path (Split-Path -Parent $cmake) 'ctest.exe'
 
 Write-Host "DTREK modern build" -ForegroundColor Cyan
 Write-Host "  configuration : $Configuration"
+Write-Host "  version       : $version"
 Write-Host "  root          : $root"
 Write-Host "  cmake         : $cmake"
 Write-Host "  dotnet        : $dotnet"
@@ -147,10 +190,69 @@ if ($Test) {
     Invoke-Checked $consoleExe
 }
 
+if ($Package) {
+    if (-not (Test-Path -LiteralPath $artifactDll)) {
+        throw "Native DLL not found at '$artifactDll'. Run without -SkipNative first."
+    }
+
+    $iscc = Find-InnoSetup
+    $publishDir = Join-Path $distDir "DTREK-$version-win-x64"
+    $zipPath = "$publishDir.zip"
+    $installerPath = Join-Path $distDir "DTREK-$version-win-x64-setup.exe"
+
+    Write-Host
+    Write-Host '[package] Publishing self-contained win-x64 app' -ForegroundColor Yellow
+    if (Test-Path -LiteralPath $publishDir) {
+        Remove-Item -LiteralPath $publishDir -Recurse -Force
+    }
+    if (Test-Path -LiteralPath $zipPath) {
+        Remove-Item -LiteralPath $zipPath -Force
+    }
+    if (Test-Path -LiteralPath $installerPath) {
+        Remove-Item -LiteralPath $installerPath -Force
+    }
+    New-Item -ItemType Directory -Path $distDir -Force | Out-Null
+
+    Invoke-Checked $dotnet @(
+        'publish', (Join-Path $root 'src\Dtrek.App\Dtrek.App.csproj'),
+        '-c', $Configuration,
+        '-r', 'win-x64',
+        '--self-contained', 'true',
+        '-p:PublishSingleFile=false',
+        '-p:PublishTrimmed=false',
+        '-p:DebugType=None',
+        '-p:DebugSymbols=false',
+        '-o', $publishDir,
+        '-v', 'minimal'
+    )
+
+    $publishedDll = Join-Path $publishDir 'dtrek_core.dll'
+    if (-not (Test-Path -LiteralPath $publishedDll)) {
+        throw "Published app is missing dtrek_core.dll at '$publishedDll'."
+    }
+
+    Write-Host '[package] Creating portable ZIP' -ForegroundColor Yellow
+    Compress-Archive -Path $publishDir -DestinationPath $zipPath -CompressionLevel Optimal
+
+    Write-Host '[package] Building Inno Setup installer' -ForegroundColor Yellow
+    Invoke-Checked $iscc @(
+        "/DMyAppVersion=$version",
+        (Join-Path $root 'installer\dtrek.iss')
+    )
+
+    if (-not (Test-Path -LiteralPath $installerPath)) {
+        throw "Installer was not created at '$installerPath'."
+    }
+}
+
 Write-Host
 Write-Host 'Build complete.' -ForegroundColor Green
 Write-Host "  app     : $appExe"
 Write-Host "  console : $consoleExe"
+if ($Package) {
+    Write-Host "  setup   : $installerPath"
+    Write-Host "  portable: $zipPath"
+}
 Write-Host '  run     : .\scripts\build.ps1 -Run'
 
 if ($Run) {

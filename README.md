@@ -4,7 +4,8 @@ A Windows conversion of the 1989 X11/SunOS game **DTREK**, built as a
 platform-independent C simulation core with a .NET 10 front-end.
 
 The original source in `C:\dtrek\Dtrek` is a read-only reference and is not
-modified by this project. All conversion work lives under `C:\dtrek\modern`.
+modified by this project. All conversion work lives under `C:\dtrek\modern` and
+is published at https://github.com/ceasterd/DTREK-WINDOWS.
 
 ---
 
@@ -184,8 +185,11 @@ or damage ABI.
 - Visual Studio 2022 Build Tools with the **Desktop development with C++**
   workload (MSVC 14.4x and the bundled CMake).
 - .NET SDK 10.0 or later.
+- Inno Setup 6 for `-Package` builds. The installed game is self-contained and
+  needs neither the .NET runtime nor the Visual C++ redistributable.
 
-The build script finds CMake and `dotnet` even when they are not on `PATH`.
+The build script finds CMake and `dotnet` even when they are not on `PATH`. It
+also looks for Inno Setup in its per-user and machine-wide default locations.
 
 ---
 
@@ -196,6 +200,9 @@ From `C:\dtrek\modern`:
 ```powershell
 # Build everything, then run the native and managed tests
 .\scripts\build.ps1 -Test
+
+# Build, test, and create dist\DTREK-0.6.0-win-x64-setup.exe plus a portable ZIP
+.\scripts\build.ps1 -Test -Package
 
 # Build and launch the WPF app
 .\scripts\build.ps1 -Run
@@ -214,6 +221,9 @@ src\Dtrek.Console\bin\Release\net10.0\Dtrek.Console.exe
 src\Dtrek.App\bin\Release\net10.0-windows\Dtrek.App.exe
 artifacts\native\dtrek_core.dll
 artifacts\native\dtrek_core_tests.exe
+dist\DTREK-0.6.0-win-x64\                 (packaged app files)
+dist\DTREK-0.6.0-win-x64.zip              (portable build)
+dist\DTREK-0.6.0-win-x64-setup.exe        (Inno Setup installer)
 ```
 
 ### Manual build
@@ -230,6 +240,28 @@ dotnet run --project src/Dtrek.App -c Release
 
 `dtrek_core.dll` is copied beside every managed executable by
 `Directory.Build.props`, so both `dotnet run` and direct launches work.
+
+### Packaging
+
+`-Package` runs `dotnet publish` with the `win-x64` profile as a self-contained
+folder, verifies that `dtrek_core.dll` is present, creates a portable ZIP, and
+compiles `installer/dtrek.iss` with Inno Setup. The native core links the MSVC
+runtime statically, so there is no VC++ redistributable prerequisite.
+
+The installer is per-user by default and installs under
+`%LOCALAPPDATA%\Programs\DTREK`; the setup dialog also allows an all-users
+install. It shows and installs the original DTREK notice from `LICENSE.txt`,
+creates Start Menu entries, an optional desktop shortcut, and an uninstaller.
+The version comes from `DtrekVersion` in `Directory.Build.props`, which also
+stamps the managed assemblies.
+
+### GitHub releases
+
+`.github/workflows/ci.yml` builds and tests pushes and pull requests against
+`main`. `.github/workflows/release.yml` runs on tags matching `v*`: it verifies
+that the tag matches `DtrekVersion`, builds and tests the project, uploads the
+ZIP and installer as workflow artifacts, and attaches them to the GitHub
+release. Manual runs build and upload artifacts without creating a release.
 
 ---
 
@@ -294,6 +326,7 @@ C:\dtrek
   modern\
     Dtrek.sln
     Directory.Build.props        shared managed settings + native DLL copy
+    LICENSE.txt                  original DTREK notice and permission
     native\
       include\dtrek_core.h       public C ABI
       src\core.c                 movement, combat, damage, places, snapshots
@@ -307,8 +340,12 @@ C:\dtrek
       Dtrek.Core\                P/Invoke, DtrekEngine, snapshot/result types
       Dtrek.Console\             interop smoke test
       Dtrek.App\                 WPF front-end (GalaxyView, GameSession, HUD)
+        Properties\PublishProfiles\win-x64.pubxml
+    installer\dtrek.iss          Inno Setup installer definition
+    .github\workflows\           CI and tagged-release pipelines
     scripts\build.ps1
     artifacts\native\            generated DLL, import library, test exe
+    dist\                        generated publish, ZIP, and installer (ignored)
 ```
 
 ---

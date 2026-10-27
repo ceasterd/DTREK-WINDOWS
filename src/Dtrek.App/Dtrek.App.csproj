@@ -10,4 +10,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Dtrek.Core\Dtrek.Core.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\LICENSE.txt" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

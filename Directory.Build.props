@@ -4,6 +4,16 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <Deterministic>true</Deterministic>
+    <DtrekVersion>0.6.0</DtrekVersion>
+    <Version>$(DtrekVersion)</Version>
+    <AssemblyVersion>$(DtrekVersion).0</AssemblyVersion>
+    <FileVersion>$(DtrekVersion).0</FileVersion>
+    <InformationalVersion>$(DtrekVersion)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <Company>DTREK Modern</Company>
+    <Product>DTREK</Product>
+    <Copyright>Copyright (c) 1986 Chris Guthrie; major overhaul 1989 Daryl Poe; Windows conversion 2026.</Copyright>
     <DtrekNativeArtifact>$(MSBuildThisFileDirectory)artifacts\native\dtrek_core.dll</DtrekNativeArtifact>
   </PropertyGroup>
 
