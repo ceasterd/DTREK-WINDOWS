@@ -1,0 +1,12 @@
+# Build outputs
+**/bin/
+**/obj/
+artifacts/
+native/build/
+
+# Visual Studio / .NET user state
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates

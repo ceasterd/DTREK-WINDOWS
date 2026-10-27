@@ -1,0 +1,22 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <DtrekNativeArtifact>$(MSBuildThisFileDirectory)artifacts\native\dtrek_core.dll</DtrekNativeArtifact>
+  </PropertyGroup>
+
+  <!--
+    The native core is built first by scripts/build.ps1.  Every managed
+    project gets a copy beside its executable so DllImport("dtrek_core")
+    works both under dotnet run and when launched directly.
+  -->
+  <ItemGroup Condition="Exists('$(DtrekNativeArtifact)')">
+    <None Include="$(DtrekNativeArtifact)">
+      <Link>dtrek_core.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+</Project>
