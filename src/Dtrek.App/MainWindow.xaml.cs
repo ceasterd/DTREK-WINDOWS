@@ -127,14 +127,17 @@ public partial class MainWindow : Window
             var menuLog = _game.Log;
             MessageText.Text = string.Join(Environment.NewLine, menuLog.TakeLast(9));
 
+            View.ShowGalaxyMap = _showGalaxyMap;
             View.SetScene(
                 _game.Snapshot ?? CreateEmptySnapshot(),
                 -1,
                 -1,
                 Array.Empty<BeamEffect>(),
                 0,
-                "SELECT RACE",
-                "1) Federation   2) Romulan   3) Klingon   4) Orion   5) Independent");
+                _showGalaxyMap ? "GALAXY MAP" : "SELECT RACE",
+                _showGalaxyMap
+                    ? "G to close"
+                    : "1) Federation   2) Romulan   3) Klingon   4) Orion   5) Independent");
 
             return;
         }
@@ -261,9 +264,15 @@ public partial class MainWindow : Window
         MessageText.Text = string.Join(
             Environment.NewLine, log.TakeLast(7));
 
+        View.ShowGalaxyMap = _showGalaxyMap;
         string? overlay = null;
         string? subtitle = null;
-        if (_game.Paused)
+        if (_showGalaxyMap)
+        {
+            overlay = "GALAXY MAP";
+            subtitle = "G to close";
+        }
+        else if (_game.Paused)
         {
             overlay = "PAUSED";
             subtitle = "P to resume";
@@ -453,8 +462,18 @@ public partial class MainWindow : Window
         return ratio > 0.25 ? Warning : Critical;
     }
 
+    private bool _showGalaxyMap;
+
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.G && !e.IsRepeat)
+        {
+            _showGalaxyMap = !_showGalaxyMap;
+            RefreshUi();
+            e.Handled = true;
+            return;
+        }
+
         if (!_game.IsMissionActive && !_game.Paused)
         {
             switch (e.Key)

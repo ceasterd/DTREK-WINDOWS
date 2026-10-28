@@ -88,6 +88,7 @@ public sealed class GalaxyView : FrameworkElement
     private double _cameraY;
     private double _width;
     private double _height;
+    public bool ShowGalaxyMap { get; set; }
 
     public GalaxyView()
     {
@@ -147,6 +148,19 @@ public sealed class GalaxyView : FrameworkElement
 
         _width = width;
         _height = height;
+        if (ShowGalaxyMap)
+        {
+            _scale = Math.Min(width, height) / DtrekConstants.GalaxyWidth * 0.95;
+            _cameraX = DtrekConstants.GalaxyWidth / 2.0;
+            _cameraY = DtrekConstants.GalaxyWidth / 2.0;
+            DrawStars(dc);
+            DrawGrid(dc);
+            DrawGalaxyBorder(dc);
+            DrawPlanets(dc);
+            DrawOverlay(dc, width, height);
+            return;
+        }
+
         _scale = Math.Min(width, height) / ViewSpan;
         _cameraX = DtrekConstants.GalaxyWidth / 2.0;
         _cameraY = DtrekConstants.GalaxyWidth / 2.0;
