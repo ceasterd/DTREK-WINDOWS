@@ -1741,7 +1741,7 @@ int32_t DTREK_CALL dtrek_generate_galaxy(dtrek_engine *engine, uint32_t seed)
 
     /* The rest are random objects, from planets.c. */
     for (i = 62; i < DTREK_MAX_PLANETS; ++i) {
-        switch (dtrek_rng_below(&engine->galaxy_rng, 9)) {
+        switch (dtrek_rng_below(&engine->galaxy_rng, 12)) {
         case 0:
             galaxy_make_planet(engine, i, DTREK_PLMASK_BLACKHOLE,
                 DTREK_LOCATION_RANDOM, 0, 0, NULL, &name_index);
@@ -1752,7 +1752,8 @@ int32_t DTREK_CALL dtrek_generate_galaxy(dtrek_engine *engine, uint32_t seed)
             break;
         case 2:
             galaxy_make_planet(engine, i,
-                DTREK_PLMASK_WANDERER | DTREK_PLMASK_INDEPENDENT,
+                DTREK_PLMASK_WANDERER | DTREK_PLMASK_INDEPENDENT
+                    | DTREK_PLMASK_REPAIR | DTREK_PLMASK_FUEL,
                 DTREK_LOCATION_RANDOM, 0, 0, NULL, &name_index);
             break;
         case 3:
@@ -1760,7 +1761,18 @@ int32_t DTREK_CALL dtrek_generate_galaxy(dtrek_engine *engine, uint32_t seed)
                 DTREK_LOCATION_RANDOM, 0, 0, NULL, &name_index);
             break;
         case 4:
-            galaxy_make_planet(engine, i, DTREK_PLMASK_INDEPENDENT,
+            galaxy_make_planet(engine, i,
+                DTREK_PLMASK_INDEPENDENT | DTREK_PLMASK_REPAIR | DTREK_PLMASK_FUEL,
+                DTREK_LOCATION_RANDOM, 0, 0, NULL, &name_index);
+            break;
+        case 5:
+            galaxy_make_planet(engine, i,
+                DTREK_PLMASK_INDEPENDENT | DTREK_PLMASK_REPAIR,
+                DTREK_LOCATION_RANDOM, 0, 0, NULL, &name_index);
+            break;
+        case 6:
+            galaxy_make_planet(engine, i,
+                DTREK_PLMASK_INDEPENDENT | DTREK_PLMASK_FUEL,
                 DTREK_LOCATION_RANDOM, 0, 0, NULL, &name_index);
             break;
         default:
