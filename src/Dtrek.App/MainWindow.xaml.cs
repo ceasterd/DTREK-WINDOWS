@@ -57,7 +57,7 @@ public partial class MainWindow : Window
 
     private void OnTick(object? sender, EventArgs e)
     {
-        if (!_game.Paused)
+        if (_game.IsMissionActive && !_game.Paused)
         {
             _game.Update(new InputState(
                 TurnLeft: _held.Contains(Key.A) || _held.Contains(Key.Left),
@@ -71,6 +71,74 @@ public partial class MainWindow : Window
 
     private void RefreshUi()
     {
+        if (!_game.IsMissionActive)
+        {
+            StatusText.Text = "SELECT RACE";
+            StatusText.Foreground = Warning;
+            ClockText.Text = "Press 1-5 to start a patrol";
+
+            HullText.Text = Row("Hull", 0, 1);
+            ArmorText.Text = Row("Armor", 0, 1);
+            FuelText.Text = Row("Fuel", 0, 1);
+            FuelText.Foreground = DefaultText;
+            KillsText.Text = "Kills  0";
+
+            DamageSummaryText.Text = "Select your team";
+            DamageSummaryText.Foreground = Warning;
+            DamageEmptyText.Visibility = Visibility.Collapsed;
+            DamagePanel.Children.Clear();
+
+            ScreenText.Text = "Screens  --";
+            ScreenText.Foreground = DefaultText;
+            SetShield(FrontShieldText, "Fwd", 0, 1);
+            SetShield(RightShieldText, "Right", 0, 1);
+            SetShield(RearShieldText, "Rear", 0, 1);
+            SetShield(LeftShieldText, "Left", 0, 1);
+
+            SpeedText.Text = "Warp     0 / 12";
+            CourseText.Text = "Course    0     0°";
+            BeamsText.Text = "Phasers --";
+            BeamsText.Foreground = DefaultText;
+            TubesText.Text = "Torpedo --";
+            TubesText.Foreground = DefaultText;
+            OrdnanceText.Text = "Load     --";
+            OrdnanceText.Foreground = DefaultText;
+            LockText.Text = "Lock     --";
+            LockText.Foreground = DefaultText;
+
+            OrbitText.Text = "Orbit    none";
+            OrbitText.Foreground = DefaultText;
+            PlanetText.Text = "Nearest --";
+            PlanetText.Foreground = DefaultText;
+            ServiceText.Text = "Service none";
+            ServiceText.Foreground = DefaultText;
+            ThreatText.Text = "Incoming none";
+            ThreatText.Foreground = DefaultText;
+
+            TargetNameText.Text = "No contact";
+            TargetRangeText.Text = "Range   --";
+            TargetStatusText.Text = "Hull    --";
+            TargetShieldText.Text = "Screens --";
+            TargetAiText.Text = "AI      --";
+            TargetNameText.Foreground = DefaultText;
+            TargetRangeText.Foreground = DefaultText;
+            TargetAiText.Foreground = DefaultText;
+
+            var menuLog = _game.Log;
+            MessageText.Text = string.Join(Environment.NewLine, menuLog.TakeLast(9));
+
+            View.SetScene(
+                _game.Snapshot ?? CreateEmptySnapshot(),
+                -1,
+                -1,
+                Array.Empty<BeamEffect>(),
+                0,
+                "SELECT RACE",
+                "1) Federation   2) Romulan   3) Klingon   4) Orion   5) Independent");
+
+            return;
+        }
+
         var snapshot = _game.Snapshot;
         var player = _game.Player;
         var enemy = _game.Enemy;
@@ -387,6 +455,59 @@ public partial class MainWindow : Window
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (!_game.IsMissionActive && !_game.Paused)
+        {
+            switch (e.Key)
+            {
+                case Key.D1:
+                case Key.NumPad1:
+                    if (!e.IsRepeat)
+                    {
+                        _game.StartMission(DtrekTeam.Federation);
+                        RefreshUi();
+                    }
+                    e.Handled = true;
+                    break;
+                case Key.D2:
+                case Key.NumPad2:
+                    if (!e.IsRepeat)
+                    {
+                        _game.StartMission(DtrekTeam.Romulan);
+                        RefreshUi();
+                    }
+                    e.Handled = true;
+                    break;
+                case Key.D3:
+                case Key.NumPad3:
+                    if (!e.IsRepeat)
+                    {
+                        _game.StartMission(DtrekTeam.Klingon);
+                        RefreshUi();
+                    }
+                    e.Handled = true;
+                    break;
+                case Key.D4:
+                case Key.NumPad4:
+                    if (!e.IsRepeat)
+                    {
+                        _game.StartMission(DtrekTeam.Orion);
+                        RefreshUi();
+                    }
+                    e.Handled = true;
+                    break;
+                case Key.D5:
+                case Key.NumPad5:
+                    if (!e.IsRepeat)
+                    {
+                        _game.StartMission(DtrekTeam.Independent);
+                        RefreshUi();
+                    }
+                    e.Handled = true;
+                    break;
+            }
+            return;
+        }
+
         switch (e.Key)
         {
             case Key.A:
@@ -530,10 +651,33 @@ public partial class MainWindow : Window
         _held.Clear();
     }
 
+    private GameSnapshot CreateEmptySnapshot()
+    {
+        var engine = new DtrekEngine(1989);
+        engine.GenerateGalaxy(1989);
+        engine.Step(0);
+        var snapshot = engine.CaptureSnapshot();
+        engine.Dispose();
+        return snapshot;
+    }
+
     private void OnClosed(object? sender, EventArgs e)
     {
-        _timer.Stop();
-        _game.Dispose();
+        try
+        {
+            _timer.Stop();
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            _game.Dispose();
+        }
+        catch
+        {
+        }
     }
 
     private static SolidColorBrush MakeBrush(byte red, byte green, byte blue)

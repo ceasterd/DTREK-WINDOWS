@@ -40,6 +40,30 @@ internal sealed class GameSession : IDisposable
         Impatience = 50,
         AttackSpeed = 3,
     };
+    private static readonly DtrekRobotConfig KlingonRobotConfig = new()
+    {
+        Offense = 65,
+        Impatience = 65,
+        AttackSpeed = 4,
+    };
+    private static readonly DtrekRobotConfig OrionRobotConfig = new()
+    {
+        Offense = 60,
+        Impatience = 75,
+        AttackSpeed = 6,
+    };
+    private static readonly DtrekRobotConfig RomulanHeavyConfig = new()
+    {
+        Offense = 85,
+        Impatience = 85,
+        AttackSpeed = 5,
+    };
+    private static readonly DtrekRobotConfig PatrolRobotConfig = new()
+    {
+        Offense = 55,
+        Impatience = 55,
+        AttackSpeed = 4,
+    };
 
     private const int MaxLogEntries = 40;
     private const int LockRange = 30000;
@@ -57,19 +81,41 @@ internal sealed class GameSession : IDisposable
     private int _lastRobotBeamTick = -1;
     private int _lastRobotTorpedoTick = -1;
     private bool _locked;
+    private readonly List<int> _robotSlots = [];
+    private DtrekTeam _playerTeam = DtrekTeam.Federation;
 
     public GameSession(uint seed)
     {
         Seed = seed;
         _engine = new DtrekEngine(seed);
-        StartMission();
+        _robotSlots.Clear();
+        _beams.Clear();
+        _log.Clear();
+        _detonationsLogged.Clear();
+        _damagedSystems.Clear();
+        Paused = false;
+        IsMissionActive = false;
+        EnemySlot = -1;
+        PlayerSlot = -1;
+        _locked = false;
+        AddLog("Select a race:");
+        AddLog("1) Federation");
+        AddLog("2) Romulan");
+        AddLog("3) Klingon");
+        AddLog("4) Orion");
+        AddLog("5) Independent");
+        AddLog("Press 1-5 to start.");
     }
 
     public uint Seed { get; }
 
-    public int PlayerSlot { get; private set; }
+    public bool IsMissionActive { get; private set; }
 
-    public int EnemySlot { get; private set; }
+    public int PlayerSlot { get; private set; } = -1;
+
+    public int EnemySlot { get; private set; } = -1;
+
+    public IReadOnlyList<int> RobotSlots => _robotSlots;
 
     public GameSnapshot Snapshot { get; private set; } = null!;
 
@@ -79,12 +125,41 @@ internal sealed class GameSession : IDisposable
 
     public bool Paused { get; set; }
 
-    public ShipSnapshot Player => Snapshot.GetShip(PlayerSlot);
+    public ShipSnapshot Player => PlayerSlot >= 0 && Snapshot is not null ? Snapshot.GetShip(PlayerSlot) : default!;
 
-    public ShipSnapshot Enemy => Snapshot.GetShip(EnemySlot);
+    public ShipSnapshot Enemy
+    {
+        get
+        {
+            if (!IsMissionActive || PlayerSlot < 0 || Snapshot is null)
+            {
+                return default!;
+            }
+
+            if (EnemySlot >= 0 && EnemySlot < Snapshot.Ships.Count)
+            {
+                var enemy = Snapshot.GetShip(EnemySlot);
+                if (enemy.InUse && enemy.Status != DtrekPlayerStatus.Dead)
+                {
+                    return enemy;
+                }
+            }
+
+            var nearest = FindNearestHostile();
+            if (nearest >= 0)
+            {
+                EnemySlot = nearest;
+                return Snapshot.GetShip(EnemySlot);
+            }
+
+            return Player;
+        }
+    }
 
     public int EnemyRange =>
-        (int)Math.Round(Navigation.Distance(Player, Enemy));
+        IsMissionActive && PlayerSlot >= 0 && EnemySlot >= 0
+            ? (int)Math.Round(Navigation.Distance(Player, Enemy))
+            : 0;
 
     /// <summary>Hostile torpedoes currently in flight.</summary>
     public int IncomingTorpedoes => Snapshot.Torpedoes.Count(
@@ -146,7 +221,7 @@ internal sealed class GameSession : IDisposable
     /// <summary>Applies one 100 ms update of input, AI, and simulation.</summary>
     public void Update(InputState input)
     {
-        if (Paused)
+        if (!IsMissionActive || Paused || Snapshot is null)
         {
             return;
         }
@@ -183,10 +258,55 @@ internal sealed class GameSession : IDisposable
 
         _engine.Step(1);
         RefreshSnapshot();
+        if (Snapshot is null)
+        {
+            return;
+        }
+
+        var nearest = FindNearestHostile();
+        if (nearest >= 0)
+        {
+            EnemySlot = nearest;
+        }
         TrackSubsystemDamage();
         TrackRobotEvents();
         TrackDetonations();
         PruneBeams();
+    }
+
+    private int FindNearestHostile()
+    {
+        var player = Player;
+        if (!player.InUse)
+        {
+            return -1;
+        }
+
+        int bestSlot = -1;
+        var bestRange = double.MaxValue;
+        foreach (var slot in _robotSlots)
+        {
+            if (slot < 0 || slot >= Snapshot.Ships.Count)
+            {
+                continue;
+            }
+
+            var ship = Snapshot.GetShip(slot);
+            if (!ship.InUse || ship.Status == DtrekPlayerStatus.Dead
+                || ship.Status == DtrekPlayerStatus.Exploding)
+            {
+                continue;
+            }
+
+            var range = Navigation.Distance(player, ship);
+            if (range < bestRange)
+            {
+                bestRange = range;
+                bestSlot = slot;
+            }
+        }
+
+        return bestSlot;
     }
 
     /// <summary>Fires all loaded banks along the ship's current heading.</summary>
@@ -406,12 +526,30 @@ internal sealed class GameSession : IDisposable
 
     public void Restart()
     {
+        if (!IsMissionActive)
+        {
+            return;
+        }
+
         _engine.Reset(Seed);
         _beams.Clear();
         _log.Clear();
         _detonationsLogged.Clear();
+        _robotSlots.Clear();
+        _locked = false;
         Paused = false;
-        StartMission();
+        InitializeMission(_playerTeam);
+    }
+
+    public void StartMission(DtrekTeam team)
+    {
+        if (IsMissionActive)
+        {
+            return;
+        }
+
+        _playerTeam = team;
+        InitializeMission(team);
     }
 
     public void Dispose()
@@ -419,17 +557,60 @@ internal sealed class GameSession : IDisposable
         _engine.Dispose();
     }
 
-    private void StartMission()
+    private void InitializeMission(DtrekTeam team)
     {
         _engine.GenerateGalaxy(Seed);
-        PlayerSlot = _engine.Spawn(
-            "Reliant", DtrekTeam.Federation, PlayerStartX, PlayerStartY);
-        EnemySlot = _engine.SpawnRobot(
+        var playerName = team switch
+        {
+            DtrekTeam.Romulan => "Valdore",
+            DtrekTeam.Klingon => "K'mpec",
+            DtrekTeam.Orion => "Black Widow",
+            DtrekTeam.Independent => "Rogue",
+            _ => "Reliant",
+        };
+        PlayerSlot = _engine.Spawn(playerName, team, PlayerStartX, PlayerStartY);
+        _robotSlots.Clear();
+
+        var warbird = _engine.SpawnRobot(
             "Warbird",
             DtrekTeam.Romulan,
             EnemyStartX,
             EnemyStartY,
             EnemyRobotConfig);
+        _robotSlots.Add(warbird);
+        EnemySlot = warbird;
+
+        var klingon = _engine.SpawnRobot(
+            "I.K.S. Mauler",
+            DtrekTeam.Klingon,
+            128000,
+            98000,
+            KlingonRobotConfig);
+        _robotSlots.Add(klingon);
+
+        var orion = _engine.SpawnRobot(
+            "O.R. Corsair",
+            DtrekTeam.Orion,
+            120000,
+            108000,
+            OrionRobotConfig);
+        _robotSlots.Add(orion);
+
+        var praetor = _engine.SpawnRobot(
+            "R.S. Praetor",
+            DtrekTeam.Romulan,
+            132000,
+            106000,
+            RomulanHeavyConfig);
+        _robotSlots.Add(praetor);
+
+        var patrol = _engine.SpawnRobot(
+            team == DtrekTeam.Federation ? "U.S.S. Defiant" : "Patrol",
+            team == DtrekTeam.Federation ? DtrekTeam.Klingon : DtrekTeam.Federation,
+            88000,
+            118000,
+            PatrolRobotConfig);
+        _robotSlots.Add(patrol);
 
         _course = Navigation.CourseTo(
             PlayerStartX, PlayerStartY, EnemyStartX, EnemyStartY);
@@ -442,9 +623,19 @@ internal sealed class GameSession : IDisposable
         _engine.SetControls(PlayerSlot, _course, _speed);
 
         RefreshSnapshot();
-        AddLog($"Patrol start. {Snapshot.PlanetCount} charted objects. "
-            + $"Hostile {Enemy.Name} at {EnemyRange} units.");
+        IsMissionActive = true;
+        AddLog($"{TeamLabel(team)} patrol start. {Snapshot.PlanetCount} charted objects. "
+            + $"{_robotSlots.Count} hostiles detected.");
     }
+
+    private static string TeamLabel(DtrekTeam team) => team switch
+    {
+        DtrekTeam.Romulan => "Romulan",
+        DtrekTeam.Klingon => "Klingon",
+        DtrekTeam.Orion => "Orion",
+        DtrekTeam.Independent => "Independent",
+        _ => "Federation",
+    };
 
     /// <summary>
     /// Reports each damage-control unit the first time it takes damage, and
@@ -641,7 +832,14 @@ internal sealed class GameSession : IDisposable
 
     private void RefreshSnapshot()
     {
-        Snapshot = _engine.CaptureSnapshot();
+        try
+        {
+            Snapshot = _engine.CaptureSnapshot();
+        }
+        catch
+        {
+            Snapshot = null!;
+        }
     }
 
     /// <summary>
@@ -682,7 +880,9 @@ internal sealed class GameSession : IDisposable
             : char.ToUpperInvariant(text[0]) + text[1..];
 
     private void AddLog(string message)
-    {        _log.Add($"{Snapshot.Tick / 10.0,5:0.0}s  {message}");
+    {
+        var tick = Snapshot?.Tick ?? 0;
+        _log.Add($"{tick / 10.0,5:0.0}s  {message}");
         if (_log.Count > MaxLogEntries)
         {
             _log.RemoveAt(0);

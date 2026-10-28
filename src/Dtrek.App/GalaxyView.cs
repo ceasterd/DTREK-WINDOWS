@@ -26,6 +26,8 @@ public sealed class GalaxyView : FrameworkElement
     private readonly Brush _playerFill = MakeBrush(80, 60, 230, 160);
     private readonly Pen _enemyPen = MakePen(255, 255, 92, 92, 1.6);
     private readonly Brush _enemyFill = MakeBrush(80, 230, 70, 70);
+    private readonly Pen _shieldPen = MakePen(255, 102, 200, 255, 1.4);
+    private readonly Brush _shieldFill = MakeBrush(40, 120, 200, 255);
     private readonly Pen _playerBeamPen = MakePen(235, 120, 255, 220, 2.4);
     private readonly Pen _enemyBeamPen = MakePen(235, 255, 92, 92, 2.4);
     private readonly Pen _missBeamPen = MakePen(120, 150, 175, 195, 1.2);
@@ -143,21 +145,40 @@ public sealed class GalaxyView : FrameworkElement
             return;
         }
 
-        var player = snapshot.GetShip(PlayerSlot);
         _width = width;
         _height = height;
         _scale = Math.Min(width, height) / ViewSpan;
-        _cameraX = player.InUse ? player.X : DtrekConstants.GalaxyWidth / 2.0;
-        _cameraY = player.InUse ? player.Y : DtrekConstants.GalaxyWidth / 2.0;
+        _cameraX = DtrekConstants.GalaxyWidth / 2.0;
+        _cameraY = DtrekConstants.GalaxyWidth / 2.0;
+
+        var player = default(ShipSnapshot);
+        var hasPlayer = PlayerSlot >= 0 && PlayerSlot < DtrekConstants.MaxPlayers;
+        if (hasPlayer)
+        {
+            try
+            {
+                player = snapshot.GetShip(PlayerSlot);
+                if (player.InUse)
+                {
+                    _cameraX = player.X;
+                    _cameraY = player.Y;
+                }
+            }
+            catch
+            {
+                hasPlayer = false;
+                player = default;
+            }
+        }
 
         DrawStars(dc);
         DrawGrid(dc);
         DrawGalaxyBorder(dc);
         DrawPlanets(dc);
-        DrawOrbitRing(dc, player);
-
-        if (player.InUse)
+        if (hasPlayer && player.InUse)
         {
+            DrawOrbitRing(dc, player);
+
             var center = ToScreen(player.X, player.Y);
             dc.DrawEllipse(
                 null, _rangePen, center,
@@ -171,8 +192,23 @@ public sealed class GalaxyView : FrameworkElement
 
         DrawBeams(dc);
         DrawTorpedoes(dc);
-        DrawShip(dc, snapshot.GetShip(EnemySlot), isPlayer: false);
-        DrawShip(dc, player, isPlayer: true);
+
+        if (EnemySlot >= 0 && EnemySlot < DtrekConstants.MaxPlayers)
+        {
+            try
+            {
+                DrawShip(dc, snapshot.GetShip(EnemySlot), isPlayer: false);
+            }
+            catch
+            {
+            }
+        }
+
+        if (hasPlayer && player.InUse)
+        {
+            DrawShip(dc, player, isPlayer: true);
+        }
+
         DrawOverlay(dc, width, height);
     }
 
@@ -317,7 +353,7 @@ public sealed class GalaxyView : FrameworkElement
 
     private void DrawOrbitRing(DrawingContext dc, ShipSnapshot player)
     {
-        if (!player.IsOrbiting || Snapshot is not { } snapshot)
+        if (!player.InUse || !player.IsOrbiting || Snapshot is not { } snapshot)
         {
             return;
         }
@@ -572,6 +608,12 @@ public sealed class GalaxyView : FrameworkElement
             isPlayer ? _playerPen : _enemyPen,
             geometry);
 
+        if (ship.ShieldsUp)
+        {
+            var shieldRadius = length * 1.6;
+            dc.DrawEllipse(_shieldFill, _shieldPen, center, shieldRadius, shieldRadius);
+        }
+
         var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var label = new FormattedText(
             $"{ship.Name}  {ship.Speed}w",
@@ -582,7 +624,7 @@ public sealed class GalaxyView : FrameworkElement
             isPlayer ? _labelBrush : _dimLabelBrush,
             dpi);
         dc.DrawText(label, new Point(
-            center.X - label.Width / 2, center.Y + length + 5));
+            center.X - label.Width / 2, center.Y + length + 8));
     }
 
     private void DrawOverlay(DrawingContext dc, double width, double height)

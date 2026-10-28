@@ -18,7 +18,7 @@ public partial class App : Application
         {
             MessageBox.Show(
                 "DTREK could not start.\n\n"
-                + ex.Message
+                + ex.ToString()
                 + "\n\nBuild the native core first (scripts\\build.ps1), "
                 + "then make sure dtrek_core.dll sits beside Dtrek.App.exe.",
                 "DTREK - startup failure",
